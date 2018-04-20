@@ -1,0 +1,86 @@
+#!/bin/bash
+
+ZONES=${ZONES:-""}
+DNS_SERVERS=${DNS_SERVERS:-""}
+
+function create_zone() {
+  cat >> $2 <<ZoneDef
+zone "$1" {
+        type master;
+        file "dyn/$1.db";
+        allow-transfer { ${DNS_SERVERS} 127.0.0.1; };
+        allow-update { 127.0.0.1; };
+        also-notify { ${DNS_SERVERS} };
+};
+ZoneDef
+
+  cat > $3 <<ZoneFile
+\$TTL    604800
+@       IN      SOA     localhost. root.$1. (
+                              1         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+                         NS	ns.$1.
+\$TTL 300
+ns.$1.	A	127.0.0.1
+
+ZoneFile
+
+  dig +noall +answer AXFR $1 | grep -i SOA
+  
+  if [ $? -eq 0 ]; then
+    dig +noall +answer AXFR $1 > $3
+  else
+    soa=$(dig +noall +answer SOA $1)
+  
+    if [ "x${soa}" != "x" ]; then
+      dig +noall +answer +authority +additional SOA $1 > $3
+    fi
+  fi
+  
+  # deploy the present zone
+
+}
+
+
+pushd /etc/bind > /dev/null
+   cat > named.conf <<NAMED_CONF
+options {
+        directory "/var/bind";
+
+        listen-on { any; };
+        listen-on-v6 { any; };
+
+        allow-query {
+                any;
+        };
+
+        allow-transfer {
+                none;
+        };
+
+        pid-file "/var/run/named/named.pid";
+
+        allow-recursion { none; };
+        recursion no;
+};
+
+zone "." IN {
+        type hint;
+        file "named.ca";
+};
+
+NAMED_CONF
+   
+   mkdir -p named.conf.d /var/bind/dyn
+   chown -R root:named /var/bind/dyn
+   for i in ${ZONES}
+   do
+     if [ ! -f "$(pwd)/named.conf.d/$i.named.conf" ]; then
+       create_zone $i "named.conf.d/$i.named.conf" "/var/bind/dyn/$i.db"
+     fi
+     echo include \"$(pwd)/named.conf.d/$i.named.conf\"\; >> named.conf
+   done
+popd
