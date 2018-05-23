@@ -16,5 +16,4 @@ ADD	s6.d /etc/s6.d
 #wget -O - https://letsencrypt.org/certs/isrgrootx1.pem https://letsencrypt.org/certs/lets-encrypt-x1-cross-signed.pem https://letsencrypt.org/certs/letsencryptauthorityx1.pem https://www.identrust.com/certificates/trustid/root-download-x3.html | tee -a letsencrypt-ca-certs.pem && \
 ADD	letsencrypt-ca-certs.pem /etc/ssl/
 
-VOLUME [ "/etc/bind/named.conf.d", "/var/bind/dyn", "/etc/ssl/certs.d" ]
 EXPOSE	53/tcp 53/udp
